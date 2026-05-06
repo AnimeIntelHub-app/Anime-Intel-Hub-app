@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "News": {
+       "title": "News",
+       "description": "Custom anime news article",
+       "type": "object",
+       "properties": {
+         "title": { "type": "string" },
+         "content": { "type": "string" },
+         "imageUrl": { "type": "string" },
+         "author": { "type": "string" },
+         "date": { "type": "string", "format": "date-time" }
+       },
+       "required": ["title", "content", "imageUrl", "author", "date"]
+    },
+    "AniPlay": {
+      "title": "AniPlay",
+      "description": "Short vertical anime video",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "category": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "url", "category", "createdAt"]
+    },
+    "AnimeCollection": {
+       "title": "AnimeCollection",
+       "description": "User's saved anime collection",
+       "type": "object",
+       "properties": {
+         "animeId": { "type": "number" },
+         "title": { "type": "string" },
+         "imageUrl": { "type": "string" },
+         "addedAt": { "type": "string", "format": "date-time" }
+       },
+       "required": ["animeId", "title", "imageUrl", "addedAt"]
+    },
+    "AIFeedback": {
+       "title": "AIFeedback",
+       "description": "User feedback on AI recommendations",
+       "type": "object",
+       "properties": {
+         "animeId": { "type": "number" },
+         "recommendedAnimeId": { "type": "number" },
+         "recommendedTitle": { "type": "string" },
+         "isHelpful": { "type": "boolean" },
+         "createdAt": { "type": "string", "format": "date-time" }
+       },
+       "required": ["animeId", "recommendedAnimeId", "recommendedTitle", "isHelpful", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/news/{newsId}": {
+      "schema": "News",
+      "description": "Collection of news articles"
+    },
+    "/aniplay/{videoId}": {
+      "schema": "AniPlay",
+      "description": "Collection of vertical anime videos"
+    },
+    "/users/{userId}/collections/{collectionId}": {
+      "schema": "AnimeCollection",
+      "description": "User's saved anime collection"
+    },
+    "/users/{userId}/aiFeedback/{feedbackId}": {
+      "schema": "AIFeedback",
+      "description": "User's feedback on AI recommendations"
+    }
+  }
+}

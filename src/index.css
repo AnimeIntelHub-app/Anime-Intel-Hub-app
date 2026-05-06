@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+@import "react-quill-new/dist/quill.snow.css";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-indigo-400: #FF4D4D;
+  --color-indigo-500: #FF4D4D;
+  --color-indigo-600: #FF4D4D;
+  --color-blue-400: #FF4D4D;
+  --color-blue-500: #FF4D4D;
+  --color-blue-600: #FF4D4D;
+  --color-violet-400: #FF4D4D;
+  --color-violet-500: #FF4D4D;
+  --color-violet-600: #FF4D4D;
+  --color-obsidian-900: #0a0a0b;
+  --color-obsidian-800: #0f0f10;
+}
+
+@layer base {
+  body {
+    @apply bg-obsidian-900 text-white antialiased overflow-x-hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide,
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .news-content a {
+    @apply text-indigo-400 underline decoration-indigo-400/30 underline-offset-4 hover:text-indigo-300 transition-colors;
+  }
+  .news-content ul {
+    @apply list-disc pl-5 my-4;
+  }
+  .news-content ol {
+    @apply list-decimal pl-5 my-4;
+  }
+  .news-content strong {
+    @apply text-white font-bold;
+  }
+  .news-content em {
+    @apply text-indigo-200/80 italic;
+  }
+}
+
+video::-webkit-media-controls-start-playback-button,
+video::-webkit-media-controls {
+  display: none !important;
+}
+
+video {
+  /* Prevent interaction directly on the video element if it's acting weird, 
+     though 'controls' typically overrides this */
+}
+

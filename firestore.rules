@@ -1,0 +1,72 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    match /news/{newsId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(newsId);
+      allow update: if isSignedIn() && isValidId(newsId);
+      allow delete: if isSignedIn();
+    }
+
+    match /aniplay/{videoId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(videoId);
+      allow update: if isSignedIn() && isValidId(videoId);
+      allow delete: if isSignedIn();
+    }
+    
+    function isValidAnimeCollection(data) {
+      return data.keys().hasAll(['animeId', 'title', 'imageUrl', 'addedAt']) &&
+             data.keys().size() == 4 &&
+             data.animeId is number &&
+             data.title is string && data.title.size() <= 200 &&
+             data.imageUrl is string && data.imageUrl.size() <= 1000 &&
+             data.addedAt is string;
+    }
+
+    match /users/{userId}/collections/{collectionId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidAnimeCollection(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidAnimeCollection(incoming()) && incoming().diff(resource.data).affectedKeys().hasOnly(['title', 'imageUrl']);
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidAIFeedback(data) {
+      return data.keys().hasAll(['animeId', 'recommendedAnimeId', 'recommendedTitle', 'isHelpful', 'createdAt']) &&
+             data.keys().size() == 5 &&
+             data.animeId is number &&
+             data.recommendedAnimeId is number &&
+             data.recommendedTitle is string && data.recommendedTitle.size() <= 200 &&
+             data.isHelpful is bool &&
+             data.createdAt is string;
+    }
+
+    match /users/{userId}/aiFeedback/{feedbackId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidAIFeedback(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidAIFeedback(incoming()) && incoming().diff(resource.data).affectedKeys().hasOnly(['isHelpful']);
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
