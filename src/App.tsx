@@ -76,6 +76,12 @@ export default function App() {
       return;
     }
     
+    if (path === 'home') {
+        window.history.replaceState({ stackIdx: 0 }, '');
+        setNavigationStack(['home']);
+        return;
+    }
+    
     if (['home', 'news', 'aniplay', 'anibase', 'settings'].includes(path)) {
       window.history.replaceState({ stackIdx: 0 }, '');
       setNavigationStack([path]);
@@ -89,14 +95,14 @@ export default function App() {
   };
 
   const goBack = () => {
-    // If we have a hashtag like #trailer, we close it by going back
-    if (window.location.hash === '#trailer') {
-      window.history.back();
-      return;
-    }
-
     if (navigationStack.length > 1) {
       window.history.back();
+    } else {
+        // If at home, we don't have a history to pop.
+        const confirmExit = window.confirm("Press OK to exit the app.");
+        if (confirmExit) {
+            window.close(); // Not always allowed, but indicates intent.
+        }
     }
   };
 
@@ -118,6 +124,13 @@ export default function App() {
           }
           return prevStack;
         });
+      } else if (state && state.screen === 'saved-anime') {
+          // If we popped into 'saved-anime', ensure it's handled if needed.
+          // But our AniBaseScreen manages it.
+      } else {
+        // If no recognizable state, maybe it just closed the view?
+        // AniBaseScreen needs to be notified if it's open.
+        window.dispatchEvent(new CustomEvent('popstate-external', { detail: state }));
       }
     };
 
@@ -131,46 +144,56 @@ export default function App() {
 
   const currentPath = navigationStack[navigationStack.length - 1];
 
-  const renderActiveScreen = () => {
-    if (currentPath === 'admin') return <AdminUploadScreen onBack={goBack} />;
+  const renderOverlay = () => {
+    if (currentPath === 'admin') {
+      return (
+        <motion.div
+          key="admin-overlay"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 20 }}
+          transition={{ duration: 0.2 }}
+          className="absolute inset-0 z-50 bg-black min-h-screen overflow-y-auto"
+        >
+          <AdminUploadScreen onBack={goBack} />
+        </motion.div>
+      );
+    }
+    
     if (currentPath.startsWith('anime-') && selectedAnimeId) {
-      return <AnimeDetailsScreen animeId={selectedAnimeId} onBack={goBack} onNavigate={(id) => navigateTo(`anime-${id}`)} />;
+      return (
+        <motion.div
+          key={`anime-details-${selectedAnimeId}`}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 20 }}
+          transition={{ duration: 0.2 }}
+          className="absolute inset-0 z-50 bg-[#080808] min-h-screen overflow-y-auto"
+        >
+          <AnimeDetailsScreen animeId={selectedAnimeId} onBack={goBack} onNavigate={(id) => navigateTo(`anime-${id}`)} />
+        </motion.div>
+      );
     }
 
-    switch (activeTab) {
-      case 'home':
-        return <HomeScreen onNavigate={navigateTo} setSelectedNewsItem={setSelectedNews} />;
-      case 'news':
-        return <NewsScreen selectedNewsItem={selectedNews} onClearSelection={() => setSelectedNews(null)} />;
-      case 'aniplay':
-        return <AniPlayScreen />;
-      case 'anibase':
-        return <AniBaseScreen onSelectAnime={(id) => navigateTo(`anime-${id}`)} />;
-      case 'settings':
-        return <SettingsScreen />;
-      default:
-        return <HomeScreen onNavigate={navigateTo} setSelectedNewsItem={setSelectedNews} />;
-    }
+    return null;
   };
 
-  const showNav = true;
-
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-black text-white' : 'bg-white text-black'} font-sans selection:bg-cyan-500/30`}>
-      <main className={`max-w-lg mx-auto ${theme === 'dark' ? 'bg-black' : 'bg-white'} min-h-screen relative shadow-2xl pb-24`}>
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-black text-white' : 'bg-white text-black'} font-sans selection:bg-cyan-500/30 overflow-x-hidden`}>
+      <main className={`max-w-lg mx-auto ${theme === 'dark' ? 'bg-black' : 'bg-white'} min-h-screen relative shadow-2xl`}>
+        <div className={`pb-24 ${(currentPath.startsWith('anime-') || currentPath === 'admin') ? 'hidden' : 'block'}`}>
+          <div style={{display: activeTab === 'home' ? 'block' : 'none'}}><HomeScreen onNavigate={navigateTo} setSelectedNewsItem={setSelectedNews} /></div>
+          <div style={{display: activeTab === 'news' ? 'block' : 'none'}}><NewsScreen selectedNewsItem={selectedNews} onClearSelection={() => setSelectedNews(null)} /></div>
+          <div style={{display: activeTab === 'aniplay' ? 'block' : 'none'}}><AniPlayScreen /></div>
+          <div style={{display: activeTab === 'anibase' ? 'block' : 'none'}}><AniBaseScreen onSelectAnime={(id) => navigateTo(`anime-${id}`)} /></div>
+          <div style={{display: activeTab === 'settings' ? 'block' : 'none'}}><SettingsScreen onNavigate={navigateTo} /></div>
+        </div>
+
         <AnimatePresence mode="wait">
-          <motion.div
-            key={currentPath}
-            initial={{ opacity: 0, x: 5 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -5 }}
-            transition={{ duration: 0.2 }}
-          >
-            {renderActiveScreen()}
-          </motion.div>
+          {renderOverlay()}
         </AnimatePresence>
 
-        {showNav && (
+        {!(currentPath.startsWith('anime-') || currentPath === 'admin') && (
           <BottomNav currentTab={activeTab} setTab={navigateTo} />
         )}
       </main>

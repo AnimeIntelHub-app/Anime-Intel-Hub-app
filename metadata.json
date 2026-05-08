@@ -1,6 +1,5 @@
 {
   "name": "Anime Intel Hub",
   "description": "Your ultimate anime companion for news, database, and trending shorts.",
-  "requestFramePermissions": [],
-  "majorCapabilities": []
+  "requestFramePermissions": []
 }

@@ -265,3 +265,15 @@ export async function getAnimeEpisodes(id: number, ignoreCache = false) {
     }
   }, ignoreCache);
 }
+
+export async function getMoreInfo(animeId: number) {
+  return fetchWithCache(`more_info_${animeId}`, async () => {
+    try {
+      const data = await queuedFetch(`${BASE_URL}/anime/${animeId}/moreinfo`);
+      return data.data;
+    } catch (e) {
+      console.error(`Error fetching more info for anime ${animeId}:`, e);
+      return null;
+    }
+  });
+}

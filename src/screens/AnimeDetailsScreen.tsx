@@ -1,8 +1,8 @@
-import { ArrowLeft, Star, Clock, Calendar, Film, Layers, PlayCircle, Loader2, Share2, Plus, Heart, Bell, Info, ChevronRight, ExternalLink, Play, X, Settings2, Globe, Sparkles, Bookmark, BookmarkCheck, Database } from 'lucide-react';
+import { ArrowLeft, Star, Clock, Calendar, Film, Layers, PlayCircle, Loader2, Share2, Plus, Heart, Bell, Info, ChevronRight, ExternalLink, Play, X, Settings2, Globe, Sparkles, Bookmark, BookmarkCheck, Database, Award } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useEffect, useState, useRef } from 'react';
 import { getAnimeById, getAnimeEpisodes, searchAnime } from '../services/animeService';
-import { getAIRecommendations, AIRecommendation } from '../services/aiService';
+import { getAIRecommendations, AIRecommendation, getEpisodeSynopsis } from '../services/aiService';
 import { Anime } from '../types';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, getDoc, setDoc, deleteDoc, collection } from 'firebase/firestore';
@@ -211,6 +211,8 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
     trailerButtonRef.current?.focus();
   };
   const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
+  const [selectedEpDetails, setSelectedEpDetails] = useState<any>(null);
+  const [epDetailsLoading, setEpDetailsLoading] = useState(false);
   const [selectedServer, setSelectedServer] = useState(0);
   const [relationMetadata, setRelationMetadata] = useState<Record<number, { title?: string, duration?: string, type?: string, image?: string }>>({});
   const [aiRecs, setAiRecs] = useState<{rec: AIRecommendation, anime: Anime}[]>([]);
@@ -234,24 +236,43 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
     }
   }, [user, anime]);
 
-  const checkIfSaved = async (userId: string, malId: number) => {
+  const checkIfSaved = async (userId: string | null, malId: number) => {
     try {
-      const docRef = doc(db, 'users', userId, 'collections', malId.toString());
-      const docSnap = await getDoc(docRef);
-      setIsSaved(docSnap.exists());
+      if (userId) {
+        const docRef = doc(db, 'users', userId, 'collections', malId.toString());
+        const docSnap = await getDoc(docRef);
+        setIsSaved(docSnap.exists());
+      } else {
+        const saved = JSON.parse(localStorage.getItem('saved_anime') || '[]');
+        setIsSaved(saved.includes(malId));
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.GET, `users/${userId}/collections/${malId}`);
+      if (userId) {
+        handleFirestoreError(err, OperationType.GET, `users/${userId}/collections/${malId}`);
+      }
     }
   };
 
   const toggleCollection = async () => {
-    if (!user) {
-      alert("Please login to save anime to your collection.");
-      return;
-    }
     if (!anime) return;
     
     setSavingLoading(true);
+    
+    if (!user) {
+        const saved = JSON.parse(localStorage.getItem('saved_anime') || '[]');
+        if (isSaved) {
+            const newSaved = saved.filter((id: number) => id !== anime.mal_id);
+            localStorage.setItem('saved_anime', JSON.stringify(newSaved));
+            setIsSaved(false);
+        } else {
+            saved.push(anime.mal_id);
+            localStorage.setItem('saved_anime', JSON.stringify(saved));
+            setIsSaved(true);
+        }
+        setSavingLoading(false);
+        return;
+    }
+    
     const docRef = doc(db, 'users', user.uid, 'collections', anime.mal_id.toString());
     
     try {
@@ -289,7 +310,7 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
       url: window.location.href,
     };
 
-    if (navigator.share) {
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
       try {
         await navigator.share(shareData);
       } catch (err) {
@@ -307,9 +328,26 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
     }
   };
 
-  const handleEpisodeClick = (epNum: number) => {
-    // Modal disabled as per user request
-    console.log("Episode clicked:", epNum);
+  const handleEpisodeClick = async (epNum: number) => {
+    setSelectedEpisode(epNum);
+    setEpDetailsLoading(true);
+    
+    // Use the already loaded episodes list instead of a non-existent detailed endpoint
+    const details = episodes.find((ep: any) => ep.mal_id === epNum);
+    
+    try {
+      // Get synopsis from AI service
+      const synopsis = await getEpisodeSynopsis(anime?.title_english || anime?.title || 'Anime', epNum);
+      setSelectedEpDetails({
+        ...(details || { mal_id: epNum, title: `Episode ${epNum}` }),
+        synopsis
+      });
+    } catch (err) {
+      console.error("Error fetching episode details:", err);
+      setSelectedEpDetails(details || { mal_id: epNum, title: `Episode ${epNum}` });
+    } finally {
+      setEpDetailsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -548,7 +586,7 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#080808]/80 to-[#080808]" />
       </div>
 
-      <div className="max-w-[1400px] mx-auto relative z-10 px-4 md:px-12 py-8">
+      <div className="max-w-[1400px] mx-auto relative z-10 px-4 md:px-12 py-8 pt-16 md:pt-24">
         {/* Navigation */}
         <div className="flex items-center gap-4 mb-8">
           <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group">
@@ -741,20 +779,27 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
             <div className="space-y-8">
               <div className="flex items-center gap-1 p-1 bg-white/5 rounded-2xl border border-white/10 w-fit">
                 {[
-                  { id: 'episodes', label: 'Episodes' },
-                  { id: 'relations', label: 'Relations' },
-                  { id: 'recommendations', label: 'Recommendations' },
+                  { id: 'episodes', label: 'Episodes', count: episodes.length },
+                  { id: 'relations', label: 'Relations', count: (categorizedRelations.seasons.length + categorizedRelations.movies.length + categorizedRelations.others.length) },
+                  { id: 'recommendations', label: 'Recommendations', count: aiRecs.length },
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as TabType)}
-                    className={`px-8 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                    className={`px-8 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-3 ${
                       activeTab === tab.id 
                         ? 'bg-white/10 text-white shadow-xl' 
                         : 'text-gray-500 hover:text-gray-300'
                     }`}
                   >
                     {tab.label}
+                    {tab.count > 0 && (
+                      <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black border ${
+                        activeTab === tab.id ? 'bg-indigo-500 text-white border-indigo-400' : 'bg-white/5 text-gray-500 border-white/10'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -784,19 +829,24 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
                         </div>
                       ) : (
                         <>
-                          {episodes.length > 50 && (
+                          {episodes.length > 25 && (
                             <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
-                              {Array.from({ length: Math.ceil(episodes.length / 50) }).map((_, i) => (
+                              {Array.from({ length: Math.ceil(episodes.length / 25) }).map((_, i) => (
                                 <button
                                   key={i}
                                   onClick={() => setSelectedBatch(i)}
-                                  className={`px-6 py-3 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border uppercase tracking-widest ${
+                                  className={`px-6 py-3 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border uppercase tracking-widest flex items-center gap-3 ${
                                     selectedBatch === i
-                                      ? 'bg-indigo-600 text-white border-indigo-600'
+                                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-[0_0_20px_rgba(79,70,229,0.3)]'
                                       : 'bg-white/5 text-gray-500 border-white/10 hover:border-white/20'
                                   }`}
                                 >
-                                  {i * 50 + 1}-{Math.min((i + 1) * 50, episodes.length)}
+                                  <span>{i * 25 + 1}-{Math.min((i + 1) * 25, episodes.length)}</span>
+                                  <span className={`px-2 py-0.5 rounded-md text-[8px] font-black border ${
+                                    selectedBatch === i ? 'bg-white/20 border-white/20' : 'bg-white/5 border-white/10 text-gray-600'
+                                  }`}>
+                                    {Math.min((i + 1) * 25, episodes.length) - (i * 25)}
+                                  </span>
                                 </button>
                               ))}
                             </div>
@@ -804,7 +854,7 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {episodes.length > 0 ? (
-                              episodes.slice(selectedBatch * 50, (selectedBatch + 1) * 50).map((ep: any) => (
+                              episodes.slice(selectedBatch * 25, (selectedBatch + 1) * 25).map((ep: any) => (
                                 <button 
                                   key={ep.mal_id} 
                                   onClick={() => handleEpisodeClick(ep.mal_id)}
@@ -998,6 +1048,129 @@ export default function AnimeDetailsScreen({ animeId, onBack, onNavigate }: Anim
                 allowFullScreen
                 title="Anime Trailer"
               />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Episode Details Modal */}
+      <AnimatePresence>
+        {selectedEpisode !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8"
+          >
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/90 backdrop-blur-xl"
+              onClick={() => setSelectedEpisode(null)}
+            />
+            
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-2xl bg-[#0a0a0a] rounded-3xl overflow-hidden border border-white/10 shadow-[0_64px_128px_-16px_rgba(0,0,0,1)] flex flex-col max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="p-6 md:p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 font-black text-xs border border-indigo-500/20 shadow-inner">
+                    EP {selectedEpisode}
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Episode Details</div>
+                    <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight">
+                      {epDetailsLoading ? 'Loading Intelligence...' : selectedEpDetails?.title || `Episode ${selectedEpisode}`}
+                    </h2>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedEpisode(null)}
+                  className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all border border-white/10 group shadow-lg"
+                >
+                  <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto no-scrollbar p-6 md:p-8 space-y-8">
+                {epDetailsLoading ? (
+                  <div className="py-20 flex flex-col items-center justify-center gap-4">
+                    <Loader2 size={32} className="text-indigo-500 animate-spin" />
+                    <div className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Retrieving Metadata...</div>
+                  </div>
+                ) : selectedEpDetails ? (
+                  <>
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1 group hover:border-indigo-500/30 transition-colors">
+                        <div className="flex items-center gap-2 text-yellow-500 text-[10px] font-black uppercase tracking-widest mb-1">
+                          <Star size={10} fill="currentColor" /> Rating
+                        </div>
+                        <div className="text-white font-black text-lg">{anime.score || 'N/A'}</div>
+                      </div>
+                      <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1 group hover:border-indigo-500/30 transition-colors">
+                        <div className="flex items-center gap-2 text-indigo-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                          <Calendar size={10} /> Aired
+                        </div>
+                        <div className="text-white font-black text-lg">
+                          {selectedEpDetails.aired ? new Date(selectedEpDetails.aired).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown'}
+                        </div>
+                      </div>
+                      <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1 group hover:border-indigo-500/30 transition-colors">
+                        <div className="flex items-center gap-2 text-rose-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                          <Clock size={10} /> Length
+                        </div>
+                        <div className="text-white font-black text-lg">{anime.duration || '24m'}</div>
+                      </div>
+                      <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1 group hover:border-indigo-500/30 transition-colors">
+                        <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                          <Award size={10} /> Filler
+                        </div>
+                        <div className={`text-lg font-black ${selectedEpDetails.filler ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {selectedEpDetails.filler ? 'YES' : 'NO'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Synopsis */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-px flex-1 bg-white/5" />
+                        <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Neural Synopsis</div>
+                        <div className="h-px flex-1 bg-white/5" />
+                      </div>
+                      <div className="bg-white/[0.02] p-6 rounded-3xl border border-white/5">
+                        <p className="text-gray-300 leading-relaxed text-sm">
+                          {selectedEpDetails.synopsis || "No detailed synopsis available for this episode. Stay tuned for database updates."}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Footer Extra Info */}
+                    <div className="flex flex-wrap gap-4 pt-4">
+                       <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-white/5 px-4 py-2 rounded-xl border border-white/10">
+                          <Globe size={12} /> {selectedEpDetails.title_japanese || 'N/A'}
+                       </div>
+                       {selectedEpDetails.recap && (
+                         <div className="flex items-center gap-2 text-[10px] font-bold text-amber-500 uppercase tracking-widest bg-amber-500/10 px-4 py-2 rounded-xl border border-amber-500/20">
+                            <Layers size={12} /> Recap Episode
+                         </div>
+                       )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-20 text-center space-y-4">
+                    <div className="text-gray-500 font-bold uppercase tracking-[0.2em] text-sm">No Intel Found</div>
+                    <p className="text-xs text-gray-600 max-w-xs mx-auto">The requested data could not be retrieved from the central database.</p>
+                  </div>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}

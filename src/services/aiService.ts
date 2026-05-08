@@ -68,3 +68,25 @@ export async function getAIRecommendations(anime: Anime, excludeTitles: string[]
     }
   });
 }
+
+export async function getEpisodeSynopsis(animeTitle: string, episodeNumber: number): Promise<string> {
+  if (!process.env.GEMINI_API_KEY) {
+    return "Synopsis currently unavailable.";
+  }
+
+  return fetchWithCache(`ai_ep_synopsis_${animeTitle}_${episodeNumber}`, async () => {
+    const prompt = `Provide a brief (2-3 sentences), spoiler-free synopsis for episode ${episodeNumber} of the anime "${animeTitle}". Only provide the synopsis text, nothing else.`;
+  
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt
+      });
+  
+      return response.text || "No synopsis found for this episode.";
+    } catch (error) {
+      console.error("AI Synopsis Error:", error);
+      return "Unable to retrieve synopsis at this time.";
+    }
+  });
+}

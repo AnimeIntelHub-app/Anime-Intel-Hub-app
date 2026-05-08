@@ -1,10 +1,15 @@
-import { Palette, Moon, Sun, Monitor, Bell, Shield, Info, Keyboard, RefreshCw, Download, CheckCircle2, X } from 'lucide-react';
+import { Palette, Moon, Sun, Monitor, Bell, Shield, Info, Keyboard, RefreshCw, Download, CheckCircle2, X, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState, useEffect } from 'react';
+import PullToRefresh from '../components/PullToRefresh';
 
 const AVAILABLE_VERSION = "1.0.5"; // Increase this version string to trigger an update
 
-export default function SettingsScreen() {
+interface SettingsScreenProps {
+  onNavigate: (tab: string) => void;
+}
+
+export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [notifications, setNotifications] = useState(localStorage.getItem('notifications') !== 'false');
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
@@ -87,6 +92,11 @@ export default function SettingsScreen() {
     }, 800);
   };
 
+  const handleRefresh = async () => {
+    checkForUpdates();
+    await new Promise(r => setTimeout(r, 800));
+  };
+
   const themeOptions = [
     { id: 'light', label: 'Light', icon: Sun },
     { id: 'dark', label: 'Dark', icon: Moon },
@@ -94,8 +104,9 @@ export default function SettingsScreen() {
   ];
 
   return (
-    <div className="pb-24 pt-8 px-6">
-      <h1 className="text-2xl font-black text-white mb-8">Settings</h1>
+    <PullToRefresh onRefresh={handleRefresh}>
+      <div className="pb-24 pt-8 px-6">
+        <h1 className="text-2xl font-black text-white mb-8">Settings</h1>
 
       <div className="flex flex-col gap-8">
         {/* Theme Settings */}
@@ -203,6 +214,30 @@ export default function SettingsScreen() {
                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">v{currentVersion}</span>
                 )}
              </button>
+          </div>
+        </section>
+
+        {/* Administrative Access */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 text-gray-400">
+            <ShieldCheck size={18} />
+            <h3 className="text-[10px] font-black uppercase tracking-widest">Administrative Access</h3>
+          </div>
+          <div className="bg-obsidian-800 rounded-2xl border border-white/5 overflow-hidden shadow-sm">
+            <button 
+              onClick={() => onNavigate('admin')}
+              className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+            >
+               <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                     <ShieldCheck size={16} />
+                  </div>
+                  <span className="text-white text-sm font-medium">Open Admin Hub</span>
+               </div>
+               <div className="px-3 py-1 bg-white/5 rounded-lg text-[9px] font-black uppercase tracking-widest text-gray-500 border border-white/5">
+                 Access
+               </div>
+            </button>
           </div>
         </section>
 
@@ -375,5 +410,6 @@ export default function SettingsScreen() {
         )}
       </AnimatePresence>
     </div>
+    </PullToRefresh>
   );
 }

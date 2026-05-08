@@ -5,13 +5,13 @@ import { RefreshCw } from 'lucide-react';
 interface PullToRefreshProps {
   onRefresh: () => Promise<void>;
   children: React.ReactNode;
+  scrollRef?: React.RefObject<HTMLDivElement>;
 }
 
-export default function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
+export default function PullToRefresh({ onRefresh, children, scrollRef }: PullToRefreshProps) {
   const [pulling, setPulling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const controls = useAnimation();
-  const containerRef = useRef<HTMLDivElement>(null);
   
   const PULL_THRESHOLD = 80;
 
@@ -19,14 +19,25 @@ export default function PullToRefresh({ onRefresh, children }: PullToRefreshProp
     if (refreshing) return;
     
     // Only allow pull if we are at the top of the scroll
-    const scrollTop = window.scrollY || document.documentElement.scrollTop;
-    if (scrollTop > 5) return;
+    const scrollTop = scrollRef?.current 
+      ? scrollRef.current.scrollTop 
+      : (window.scrollY || document.documentElement.scrollTop);
+      
+    if (scrollTop > 5) {
+      if (pulling) setPulling(false);
+      return;
+    }
 
     const y = info.offset.y;
     if (y > 0) {
       setPulling(true);
       const dragY = Math.min(y * 0.5, PULL_THRESHOLD + 20); // Dampening
       controls.set({ y: dragY });
+    } else {
+      if (pulling) {
+        setPulling(false);
+        controls.set({ y: 0 });
+      }
     }
   };
 
@@ -53,7 +64,7 @@ export default function PullToRefresh({ onRefresh, children }: PullToRefreshProp
   };
 
   return (
-    <div ref={containerRef} className="relative w-full min-h-full">
+    <div className="relative w-full min-h-full">
       <motion.div
         className="absolute top-0 left-0 right-0 flex justify-center pt-10 z-[100] pointer-events-none"
         style={{ opacity: pulling || refreshing ? 1 : 0 }}

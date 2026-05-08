@@ -1,9 +1,10 @@
-import { Lock, Upload, ArrowLeft, CheckCircle2, AlertCircle, Trash2, FileText } from 'lucide-react';
+import { Lock, Upload, ArrowLeft, CheckCircle2, AlertCircle, Trash2, FileText, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState } from 'react';
 import ReactQuill from 'react-quill-new';
 import { db } from '../lib/firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import PullToRefresh from '../components/PullToRefresh';
 
 interface AdminUploadScreenProps {
   onBack: () => void;
@@ -122,8 +123,14 @@ export default function AdminUploadScreen({ onBack }: AdminUploadScreenProps) {
     }
   };
 
+  const handleRefresh = async () => {
+    // onSnapshot is already live, so we just simulate a refresh pulse
+    await new Promise(r => setTimeout(r, 800));
+  };
+
   return (
-    <div className="min-h-screen bg-black pb-24 flex flex-col">
+    <PullToRefresh onRefresh={handleRefresh}>
+      <div className="min-h-screen bg-black pb-24 flex flex-col">
        <header className="p-4 px-6 flex items-center justify-between border-b border-white/5 bg-black/50 backdrop-blur-xl sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <button onClick={onBack} className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all active:scale-90">
@@ -234,7 +241,7 @@ export default function AdminUploadScreen({ onBack }: AdminUploadScreenProps) {
                               {v.thumbnail ? <img src={v.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex flex-col items-center justify-center bg-indigo-500/10 text-indigo-400"><Upload size={12} /><span className="text-[6px] font-black uppercase mt-1">Auto</span></div>}
                            </div>
                            <div className="flex-1 min-w-0">
-                              <h4 className="text-white font-bold text-xs truncate">{v.title}</h4>
+                              <h4 className="text-white font-bold text-xs">{v.title}</h4>
                               <p className="text-gray-500 text-[9px] uppercase font-bold tracking-wider">{v.category}</p>
                            </div>
                            <button onClick={() => handleDelete('aniplay', v.id)} disabled={deletingId === v.id} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center opacity-60 hover:opacity-100">{deletingId === v.id ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Trash2 size={16} />}</button>
@@ -244,7 +251,7 @@ export default function AdminUploadScreen({ onBack }: AdminUploadScreenProps) {
                         <div key={n.id} className="bg-obsidian-800 p-3 rounded-2xl border border-white/5 flex items-center gap-4 group">
                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-obsidian-900 shrink-0 font-bold text-[8px] flex items-center justify-center text-gray-500 uppercase">IMG</div>
                            <div className="flex-1 min-w-0">
-                              <h4 className="text-white font-bold text-xs truncate">{n.title}</h4>
+                              <h4 className="text-white font-bold text-xs">{n.title}</h4>
                               <p className="text-gray-500 text-[9px] uppercase font-bold tracking-wider">By {n.author}</p>
                            </div>
                            <button onClick={() => handleDelete('news', n.id)} disabled={deletingId === n.id} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center opacity-60 hover:opacity-100"><Trash2 size={16} /></button>
@@ -257,5 +264,6 @@ export default function AdminUploadScreen({ onBack }: AdminUploadScreenProps) {
           )}
        </AnimatePresence>
     </div>
+    </PullToRefresh>
   );
 }
